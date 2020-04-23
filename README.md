@@ -1,2 +1,2 @@
-# traffic-to-common-destination
-Webpage that shows me the traffic status to my most frequent destinations
+# Time to common destinations
+Webpage that shows me the time to my most frequent destinations
