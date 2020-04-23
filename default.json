@@ -1,0 +1,20 @@
+{
+  "APIKey" : "yourApiKey",
+
+  "Travels": [
+    {
+      "Default 1": {
+        "Start" : "Madrid",
+        "End" : "Barcelona",
+        "By"  : "driving"
+        }
+      },
+    {
+      "Default 2": {
+        "Start" : "Barcelona",
+        "End" : "Madrid",
+        "By" : "driving"
+        }
+      }
+    ]
+}

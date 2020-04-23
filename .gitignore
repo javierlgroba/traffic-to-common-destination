@@ -1,0 +1,14 @@
+#Ignore everything
+*
+
+#But not this files
+!resources/
+!traffic/
+!default.json
+!*.md
+!*.png
+!*.ico
+!*.tpl
+!*.go
+!*.md
+!*.gitignore
