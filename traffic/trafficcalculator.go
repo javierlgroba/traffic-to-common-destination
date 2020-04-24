@@ -1,3 +1,5 @@
+//Package traffic includes the functionality to request google maps API for the
+//itineraries information
 package traffic
 
 import (
@@ -7,23 +9,20 @@ import (
 	"math"
 
 	"googlemaps.github.io/maps"
-	"github.com/kr/pretty"
 )
 
-
-//DRIVING (Default) indicates standard driving directions using the road network.
-//BICYCLING requests bicycling directions via bicycle paths & preferred streets.
-//TRANSIT requests directions via public transit routes.
-//WALKING requests walking directions via pedestrian paths & sidewalks.
+//This struct defines a travel itinerary
 type Travel struct {
 	Start, End string
 	By maps.Mode
 }
 
+//This struct is used to store all the information from a itinerary response
 type TravelInfoToPrint struct {
 	Name, Start, End, By, Duration, Color, Summary, Distance string
 }
 
+//Using a string returns the travel mode in the googlemaps format.
 //Always returns driving by default
 func GetTravelMode(by string) maps.Mode {
 	switch by {
@@ -38,10 +37,13 @@ func GetTravelMode(by string) maps.Mode {
 	}
 }
 
+//This function returns a colour depending on the traffic
+//Can't test now because of COVID19, returns always green
 func calculateTraffic(steps[] *maps.Step) string {
 	return "green"
 }
 
+//Generates a duration in a human readable way
 func calculateDuration(d time.Duration) string {
 	duration := ""
 
@@ -53,6 +55,7 @@ func calculateDuration(d time.Duration) string {
 			duration += "and "
 		}
 	}
+
 	if minutos>0 {
 		duration += fmt.Sprintf("%d minutes", int(minutos))
 	}
@@ -60,11 +63,12 @@ func calculateDuration(d time.Duration) string {
 	return duration
 }
 
+//Queries the googleMaps API and returns the information for an itinerary
 func googleMapsQuery(travel *Travel, apiKey string) *TravelInfoToPrint {
 	c, err := maps.NewClient(maps.WithAPIKey(apiKey))
 	if err != nil {
-		fmt.Println("Fatal error: ", err)
-		return &TravelInfoToPrint{}
+		fmt.Println("googleMapsQuery error: ", err)
+		return nil
 	}
 	r := &maps.DirectionsRequest{
 		Origin:      travel.Start,
@@ -72,32 +76,34 @@ func googleMapsQuery(travel *Travel, apiKey string) *TravelInfoToPrint {
 		Mode:	 travel.By	}
 	route, _, err := c.Directions(context.Background(), r)
 	if err != nil {
-		fmt.Println("Fatal error: ", err)
-		return &TravelInfoToPrint{}
+		fmt.Println("googleMapsQuery error: ", err)
+		return nil
 	}
 
 	if len(route)<1 || len(route[0].Legs)<1{
-		fmt.Println("Unable to calculate the route.")
-		return &TravelInfoToPrint{}
+		fmt.Println("googleMapsQuery: Unable to calculate the route.")
+		return nil
 	}
 
-	travelInfo := &TravelInfoToPrint{}
-	travelInfo.Start = travel.Start
-	travelInfo.End = travel.End
-	travelInfo.By = pretty.Sprint(travel.By)
-	travelInfo.Duration = calculateDuration(route[0].Legs[0].Duration)
-	travelInfo.Color = calculateTraffic(route[0].Legs[0].Steps)
-	travelInfo.Summary = route[0].Summary
-	travelInfo.Distance = pretty.Sprint(route[0].Legs[0].Distance.HumanReadable)
-
-	return travelInfo
+	return &TravelInfoToPrint{
+		Start: travel.Start,
+		End: travel.End,
+		By: fmt.Sprint(travel.By),
+		Duration: calculateDuration(route[0].Legs[0].Duration),
+		Color: calculateTraffic(route[0].Legs[0].Steps),
+		Summary: route[0].Summary,
+		Distance: fmt.Sprint(route[0].Legs[0].Distance.HumanReadable)}
 }
 
-func QueryTravels(travels *map[string]*Travel, apiKey string) *map[string]*TravelInfoToPrint {
-	result := &(map[string]*TravelInfoToPrint{})
+//Queries all the travels and returns a pointer to a slice with all the itinerary information
+func QueryTravels(travels *map[string]*Travel, apiKey string) *[]*TravelInfoToPrint {
+	result := make([]*TravelInfoToPrint, 0, len(*travels))
 	for key, travel := range *travels {
-    (*result)[key] = googleMapsQuery(travel, apiKey)
-		(*result)[key].Name = key
+    travelInfo := googleMapsQuery(travel, apiKey)
+		if travelInfo!=nil{
+			travelInfo.Name = key
+			result = append(result, travelInfo)
+		}
 	}
-	return result
+	return &result
 }

@@ -13,19 +13,24 @@ import (
   "./traffic"
 )
 
+//Struct for the templates
 type Template struct {
     templates *template.Template
 }
 
+//travel maps initialized with a default travel
 var travels = &map[string]*traffic.Travel{
 	"Default": &traffic.Travel{
 		Start: "Madrid", End: "Barcelona", By: traffic.GetTravelMode("driving")}}
+//Api key for googleMaps API
 var apiKey = ""
 
+//Implementation used by Echo to render the templates
 func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
 	return t.templates.ExecuteTemplate(w, name, data)
 }
 
+//Returns the page with all the itinerary information included
 func printDestinations(c echo.Context) error {
 	travelsToPrint := traffic.QueryTravels(travels, apiKey)
 
@@ -33,53 +38,53 @@ func printDestinations(c echo.Context) error {
 	  return c.Render(http.StatusOK, "nodestinationtemplate", "")
 	}
 
-	travelsSlices := make([]*traffic.TravelInfoToPrint, 0, len(*travelsToPrint))
-	for _, travelToPrint := range *travelsToPrint {
-		travelsSlices = append(travelsSlices, travelToPrint)
-	}
-
-  return c.Render(http.StatusOK, "traffictemplate", travelsSlices)
+  return c.Render(http.StatusOK, "traffictemplate", travelsToPrint)
 }
 
+//Prints in console the usage for the program
 func printUsage(programName string) {
   fmt.Println("Usage: ",programName," [-c configfilename]")
 }
 
+//Creates a map with all the itineraries from configuration
 func createTravelMap(input []interface{}) *map[string]*traffic.Travel {
 	result := &(map[string]*traffic.Travel{})
 
 	for _, travel := range input {
 		for k, v := range travel.(map[string]interface {}) {
-			(*result)[k] = &(traffic.Travel{})
+			//initialized with default values to avoid errors when loading config
+			individualTravel := &(traffic.Travel{
+				Start: "Madrid",
+				End: "Barcelona",
+				By: traffic.GetTravelMode("")})
 			for k1, v1 := range v.(map[string]interface {}) {
 				switch k1 {
 				case "Start":
-					(*result)[k].Start = v1.(string)
+					individualTravel.Start = v1.(string)
 				case "End":
-					(*result)[k].End = v1.(string)
+					individualTravel.End = v1.(string)
 				case "By":
-					(*result)[k].By = traffic.GetTravelMode(v1.(string))
+					individualTravel.By = traffic.GetTravelMode(v1.(string))
 				default:
 					panic(fmt.Sprintf("Wrong configuration value: %s[%s]->%s\n", k, k1, v1))
 				}
 				fmt.Printf("%s[%s]: %s\n", k, k1, v1)
 			}
+			(*result)[k] = individualTravel
 		}
 	}
 
 	return result
 }
 
+//Load the configuration from a file
 func loadConfig(configFile string) bool {
-  //viper.SetDefault("Travels", map[string]traffic.Travel{"Default": defaultTravel})
-  //viper.SetDefault("APIKey", "")
-
 	viper.SetConfigName(configFile)
 	viper.SetConfigType("json")
 	viper.AddConfigPath(".")
 	err := viper.ReadInConfig()
 	if err != nil { // Handle errors reading the config file
-		fmt.Printf("Fatal error config file: %s\n", err)
+		fmt.Printf("loadConfig: Error loading config file: %s.json\n", err)
 		return false
 	}
 
@@ -89,14 +94,15 @@ func loadConfig(configFile string) bool {
   return true
 }
 
+//Check program args at the beginning
 func checkArgs() (bool, string) {
   argsWithoutProg := os.Args[1:]
   if len(argsWithoutProg)!=2 {
-    fmt.Println("Using default config...")
+    fmt.Println("checkArgs: Using default config...")
     return true, ""
   } else {
     if argsWithoutProg[0]=="-c" {
-      fmt.Printf("Reading config from %s.json\n", argsWithoutProg[1])
+      fmt.Printf("checkArgs: Config will be load from %s.json\n", argsWithoutProg[1])
       return true, argsWithoutProg[1]
     } else {
       printUsage(os.Args[0])
@@ -106,6 +112,7 @@ func checkArgs() (bool, string) {
   return true, ""
 }
 
+//main function
 func main() {
   everythingOk, file := checkArgs()
   if !everythingOk {
