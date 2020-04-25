@@ -9,7 +9,10 @@ import (
 	"math"
 
 	"googlemaps.github.io/maps"
+	"github.com/javierlgroba/cache"
 )
+
+var localCache = cache.New(5, 10)
 
 //This struct defines a travel itinerary
 type Travel struct {
@@ -99,11 +102,21 @@ func googleMapsQuery(travel *Travel, apiKey string) *TravelInfoToPrint {
 func QueryTravels(travels *map[string]*Travel, apiKey string) *[]*TravelInfoToPrint {
 	result := make([]*TravelInfoToPrint, 0, len(*travels))
 	for key, travel := range *travels {
-    travelInfo := googleMapsQuery(travel, apiKey)
-		if travelInfo!=nil{
-			travelInfo.Name = key
-			result = append(result, travelInfo)
-		}
+		//let's check the cache
+		var travelInfo *TravelInfoToPrint
+		err, cachedTravel := localCache.Get(key)
+		if err != nil {
+			fmt.Println("Query for data")
+			travelInfo = googleMapsQuery(travel, apiKey)
+			if travelInfo!=nil{
+				travelInfo.Name = key
+				localCache.Add(key, travelInfo)
+			}
+		} else {
+				fmt.Println("Cached data")
+				travelInfo = cachedTravel.(*TravelInfoToPrint)
+			}
+		result = append(result, travelInfo)
 	}
 	return &result
 }
