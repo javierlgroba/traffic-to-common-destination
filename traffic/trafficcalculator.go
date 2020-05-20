@@ -3,13 +3,13 @@
 package traffic
 
 import (
-	"fmt"
 	"context"
-	"time"
+	"fmt"
 	"math"
+	"time"
 
-	"googlemaps.github.io/maps"
 	"github.com/javierlgroba/cache"
+	"googlemaps.github.io/maps"
 )
 
 var localCache = cache.New(5, 10)
@@ -17,7 +17,7 @@ var localCache = cache.New(5, 10)
 //This struct defines a travel itinerary
 type Travel struct {
 	Start, End string
-	By maps.Mode
+	By         maps.Mode
 }
 
 //This struct is used to store all the information from a itinerary response
@@ -42,7 +42,7 @@ func GetTravelMode(by string) maps.Mode {
 
 //This function returns a colour depending on the traffic
 //Can't test now because of COVID19, returns always green
-func calculateTraffic(steps[] *maps.Step) string {
+func calculateTraffic(steps []*maps.Step) string {
 	return "green"
 }
 
@@ -51,15 +51,15 @@ func calculateDuration(d time.Duration) string {
 	duration := ""
 
 	minutos := math.Floor(d.Minutes())
-	if horas := math.Floor(d.Hours()); horas>0 {
+	if horas := math.Floor(d.Hours()); horas > 0 {
 		duration += fmt.Sprintf("%d hours ", int(horas))
 		minutos -= horas * 60
-		if minutos >0 {
+		if minutos > 0 {
 			duration += "and "
 		}
 	}
 
-	if minutos>0 {
+	if minutos > 0 {
 		duration += fmt.Sprintf("%d minutes", int(minutos))
 	}
 
@@ -76,25 +76,25 @@ func googleMapsQuery(travel *Travel, apiKey string) *TravelInfoToPrint {
 	r := &maps.DirectionsRequest{
 		Origin:      travel.Start,
 		Destination: travel.End,
-		Mode:	 travel.By	}
+		Mode:        travel.By}
 	route, _, err := c.Directions(context.Background(), r)
 	if err != nil {
 		fmt.Println("googleMapsQuery error: ", err)
 		return nil
 	}
 
-	if len(route)<1 || len(route[0].Legs)<1{
+	if len(route) < 1 || len(route[0].Legs) < 1 {
 		fmt.Println("googleMapsQuery: Unable to calculate the route.")
 		return nil
 	}
 
 	return &TravelInfoToPrint{
-		Start: travel.Start,
-		End: travel.End,
-		By: fmt.Sprint(travel.By),
+		Start:    travel.Start,
+		End:      travel.End,
+		By:       fmt.Sprint(travel.By),
 		Duration: calculateDuration(route[0].Legs[0].Duration),
-		Color: calculateTraffic(route[0].Legs[0].Steps),
-		Summary: route[0].Summary,
+		Color:    calculateTraffic(route[0].Legs[0].Steps),
+		Summary:  route[0].Summary,
 		Distance: fmt.Sprint(route[0].Legs[0].Distance.HumanReadable)}
 }
 
@@ -108,15 +108,17 @@ func QueryTravels(travels *map[string]*Travel, apiKey string) *[]*TravelInfoToPr
 		if err != nil {
 			fmt.Println("Query for data")
 			travelInfo = googleMapsQuery(travel, apiKey)
-			if travelInfo!=nil{
+			if travelInfo != nil {
 				travelInfo.Name = key
 				localCache.Add(key, travelInfo)
 			}
 		} else {
-				fmt.Println("Cached data")
-				travelInfo = cachedTravel.(*TravelInfoToPrint)
-			}
-		result = append(result, travelInfo)
+			fmt.Println("Cached data")
+			travelInfo = cachedTravel.(*TravelInfoToPrint)
+		}
+		if travelInfo != nil {
+			result = append(result, travelInfo)
+		}
 	}
 	return &result
 }
