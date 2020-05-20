@@ -148,5 +148,5 @@ func main() {
 	e.DELETE("/deleteTravel", removeDestination)
 	e.Static("/resources", "resources")
 	e.File("/favicon.ico", "resources/favicon.ico")
-	e.Logger.Fatal(e.Start("0.0.0.0:8080"))
+	e.Logger.Fatal(e.Start("0.0.0.0:8025"))
 }

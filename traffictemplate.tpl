@@ -19,7 +19,7 @@
         h1 {
             padding: 25px;
             font-weight: black;
-            font-size: 80px;
+            font-size: 60px;
             color: white;
             margin: 0;
             text-shadow: 0px 0px 30px rgba(150, 170, 150, 0.3);
