@@ -3,14 +3,14 @@ package main
 import (
 	"io"
 	"net/http"
-  "os"
-  "fmt"
+        "os"
+        "fmt"
 	"html/template"
 
 	"github.com/labstack/echo"
-  "github.com/spf13/viper"
+        "github.com/spf13/viper"
 
-  "./traffic"
+        "./traffic"
 )
 
 //Struct for the templates
@@ -131,5 +131,5 @@ func main() {
 	e.GET("/", printDestinations)
 	e.Static("/resources", "resources")
 	e.File("/favicon.ico", "resources/favicon.ico")
-	e.Logger.Fatal(e.Start("0.0.0.0:8080"))
+	e.Logger.Fatal(e.Start("0.0.0.0:8025"))
 }
