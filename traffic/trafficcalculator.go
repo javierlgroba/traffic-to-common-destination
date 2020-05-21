@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/javierlgroba/cache"
@@ -13,6 +14,7 @@ import (
 )
 
 var localCache = cache.New(5, 10)
+var resourceMutex sync.Mutex
 
 //This struct defines a travel itinerary
 type Travel struct {
@@ -67,12 +69,14 @@ func calculateDuration(d time.Duration) string {
 }
 
 //Queries the googleMaps API and returns the information for an itinerary
-func googleMapsQuery(travel *Travel, apiKey string) *TravelInfoToPrint {
+func googleMapsQuery(travelName string, travel *Travel, apiKey string, travels *[]*TravelInfoToPrint, sem chan int) {
 	c, err := maps.NewClient(maps.WithAPIKey(apiKey))
 	if err != nil {
 		fmt.Println("googleMapsQuery error: ", err)
-		return nil
+		<-sem
+		return
 	}
+
 	r := &maps.DirectionsRequest{
 		Origin:      travel.Start,
 		Destination: travel.End,
@@ -80,15 +84,18 @@ func googleMapsQuery(travel *Travel, apiKey string) *TravelInfoToPrint {
 	route, _, err := c.Directions(context.Background(), r)
 	if err != nil {
 		fmt.Println("googleMapsQuery error: ", err)
-		return nil
+		<-sem
+		return
 	}
 
 	if len(route) < 1 || len(route[0].Legs) < 1 {
 		fmt.Println("googleMapsQuery: Unable to calculate the route.")
-		return nil
+		<-sem
+		return
 	}
 
-	return &TravelInfoToPrint{
+	travelInfo := &TravelInfoToPrint{
+		Name:     travelName,
 		Start:    travel.Start,
 		End:      travel.End,
 		By:       fmt.Sprint(travel.By),
@@ -96,29 +103,42 @@ func googleMapsQuery(travel *Travel, apiKey string) *TravelInfoToPrint {
 		Color:    calculateTraffic(route[0].Legs[0].Steps),
 		Summary:  route[0].Summary,
 		Distance: fmt.Sprint(route[0].Legs[0].Distance.HumanReadable)}
+
+	localCache.Add(travelName, travelInfo)
+	resourceMutex.Lock()
+	*travels = append(*travels, travelInfo)
+	resourceMutex.Unlock()
+	<-sem
 }
 
 //Queries all the travels and returns a pointer to a slice with all the itinerary information
 func QueryTravels(travels *map[string]*Travel, apiKey string) *[]*TravelInfoToPrint {
 	result := make([]*TravelInfoToPrint, 0, len(*travels))
+	sem := make(chan int, len(*travels))
+
 	for key, travel := range *travels {
+		sem <- 1
 		//let's check the cache
 		var travelInfo *TravelInfoToPrint
 		err, cachedTravel := localCache.Get(key)
 		if err != nil {
 			fmt.Println("Query for data")
-			travelInfo = googleMapsQuery(travel, apiKey)
-			if travelInfo != nil {
-				travelInfo.Name = key
-				localCache.Add(key, travelInfo)
-			}
+			go googleMapsQuery(key, travel, apiKey, &result, sem)
 		} else {
 			fmt.Println("Cached data")
 			travelInfo = cachedTravel.(*TravelInfoToPrint)
-		}
-		if travelInfo != nil {
-			result = append(result, travelInfo)
+			if travelInfo != nil {
+				resourceMutex.Lock()
+				result = append(result, travelInfo)
+				resourceMutex.Unlock()
+			}
+			<-sem
 		}
 	}
+
+	for i := 0; i < len(*travels); i++ {
+		sem <- 1
+	}
+
 	return &result
 }
