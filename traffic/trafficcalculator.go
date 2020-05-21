@@ -13,8 +13,8 @@ import (
 	"googlemaps.github.io/maps"
 )
 
+//Local cache
 var localCache = cache.New(5, 10)
-var resourceMutex sync.Mutex
 
 //This struct defines a travel itinerary
 type Travel struct {
@@ -68,8 +68,34 @@ func calculateDuration(d time.Duration) string {
 	return duration
 }
 
+//Convert the GoogleMaps response to our format
+func mapsToTravelInfo(travelName string, travel *Travel, route *maps.Route) *TravelInfoToPrint {
+	travelInfo := &TravelInfoToPrint{
+		Name:     travelName,
+		Start:    travel.Start,
+		End:      travel.End,
+		By:       fmt.Sprint(travel.By),
+		Duration: calculateDuration(route.Legs[0].Duration),
+		Color:    calculateTraffic(route.Legs[0].Steps),
+		Summary:  route.Summary,
+		Distance: fmt.Sprint(route.Legs[0].Distance.HumanReadable)}
+	return travelInfo
+}
+
+//Interface for the queries to googleMaps
+type googleMapsQuerier interface {
+	googleMapsQuery(travelName string, travel *Travel, apiKey string, travels *[]*TravelInfoToPrint, sem chan int)
+	QueryTravels(travels *map[string]*Travel, apiKey string) *[]*TravelInfoToPrint
+}
+
+//custom implementation of the interface
+type GoogleMapsQuery struct {
+	//Mutex for the response resource
+	resourceMutex sync.Mutex
+}
+
 //Queries the googleMaps API and returns the information for an itinerary
-func googleMapsQuery(travelName string, travel *Travel, apiKey string, travels *[]*TravelInfoToPrint, sem chan int) {
+func (custom *GoogleMapsQuery) googleMapsQuery(travelName string, travel *Travel, apiKey string, travels *[]*TravelInfoToPrint, sem chan int) {
 	c, err := maps.NewClient(maps.WithAPIKey(apiKey))
 	if err != nil {
 		fmt.Println("googleMapsQuery error: ", err)
@@ -77,42 +103,40 @@ func googleMapsQuery(travelName string, travel *Travel, apiKey string, travels *
 		return
 	}
 
+	//Prepare the request
 	r := &maps.DirectionsRequest{
 		Origin:      travel.Start,
 		Destination: travel.End,
 		Mode:        travel.By}
 	route, _, err := c.Directions(context.Background(), r)
+
+	//check everything before anything else
 	if err != nil {
 		fmt.Println("googleMapsQuery error: ", err)
 		<-sem
 		return
 	}
-
 	if len(route) < 1 || len(route[0].Legs) < 1 {
 		fmt.Println("googleMapsQuery: Unable to calculate the route.")
 		<-sem
 		return
 	}
 
-	travelInfo := &TravelInfoToPrint{
-		Name:     travelName,
-		Start:    travel.Start,
-		End:      travel.End,
-		By:       fmt.Sprint(travel.By),
-		Duration: calculateDuration(route[0].Legs[0].Duration),
-		Color:    calculateTraffic(route[0].Legs[0].Steps),
-		Summary:  route[0].Summary,
-		Distance: fmt.Sprint(route[0].Legs[0].Distance.HumanReadable)}
-
+	//Get the travelInfo and add it to the local cache
+	travelInfo := mapsToTravelInfo(travelName, travel, &route[0])
 	localCache.Add(travelName, travelInfo)
-	resourceMutex.Lock()
+
+	//Append it to the answer
+	custom.resourceMutex.Lock()
 	*travels = append(*travels, travelInfo)
-	resourceMutex.Unlock()
+	custom.resourceMutex.Unlock()
+
+	//Notify that the go routine si over
 	<-sem
 }
 
 //Queries all the travels and returns a pointer to a slice with all the itinerary information
-func QueryTravels(travels *map[string]*Travel, apiKey string) *[]*TravelInfoToPrint {
+func (custom *GoogleMapsQuery) QueryTravels(travels *map[string]*Travel, apiKey string) *[]*TravelInfoToPrint {
 	result := make([]*TravelInfoToPrint, 0, len(*travels))
 	sem := make(chan int, len(*travels))
 
@@ -123,14 +147,14 @@ func QueryTravels(travels *map[string]*Travel, apiKey string) *[]*TravelInfoToPr
 		err, cachedTravel := localCache.Get(key)
 		if err != nil {
 			fmt.Println("Query for data")
-			go googleMapsQuery(key, travel, apiKey, &result, sem)
+			go custom.googleMapsQuery(key, travel, apiKey, &result, sem)
 		} else {
 			fmt.Println("Cached data")
 			travelInfo = cachedTravel.(*TravelInfoToPrint)
 			if travelInfo != nil {
-				resourceMutex.Lock()
+				custom.resourceMutex.Lock()
 				result = append(result, travelInfo)
-				resourceMutex.Unlock()
+				custom.resourceMutex.Unlock()
 			}
 			<-sem
 		}

@@ -33,7 +33,8 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 
 //Returns the page with all the itinerary information included
 func printDestinations(c echo.Context) error {
-	travelsToPrint := traffic.QueryTravels(&travels, apiKey)
+	querier := traffic.GoogleMapsQuery{}
+	travelsToPrint := querier.QueryTravels(&travels, apiKey)
 
 	if len(*travelsToPrint) < 1 {
 		return c.Render(http.StatusOK, "nodestinationtemplate", "")
